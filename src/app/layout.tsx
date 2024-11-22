@@ -1,4 +1,4 @@
-import { ReduxProvider } from '@/app/providers/ReduxProvider';
+import { ReduxProvider } from '@/src/app/providers/ReduxProvider';
 
 export const metadata = {
   title: 'Next.js',

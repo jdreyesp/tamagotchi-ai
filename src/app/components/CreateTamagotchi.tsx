@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { CreateTamagotchiInput } from '@/lib/types/tamagotchi';
+import { CreateTamagotchiInput } from '@/src/app/lib/types/tamagotchi';
 
 interface Props {
   onCreateTamagotchi: (data: CreateTamagotchiInput) => void;

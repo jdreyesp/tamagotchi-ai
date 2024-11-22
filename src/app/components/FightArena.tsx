@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { RootState } from '@/lib/redux/store';
-import { startFight, fightRound } from '@/lib/redux/tamagotchiSlice';
+import { RootState } from '@/src/app/lib/redux/store';
+import { startFight, fightRound } from '@/src/app/lib/redux/tamagotchiSlice';
 import { animated, useSpring } from '@react-spring/web';
 
 export default function FightArena() {

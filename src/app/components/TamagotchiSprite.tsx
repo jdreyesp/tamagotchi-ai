@@ -2,7 +2,7 @@
 
 import { useSpring, animated, config } from '@react-spring/web';
 import { useState, useEffect, useCallback } from 'react';
-import { Tamagotchi } from '@/lib/redux/tamagotchiSlice';
+import { Tamagotchi } from '@/src/app/lib/redux/tamagotchiSlice';
 import { useDispatch } from 'react-redux';
 import { 
   feedTamagotchi, 
@@ -14,9 +14,9 @@ import {
   decreaseHunger,
   orphanSuffering,
   tryAdoptOrphans
-} from '@/lib/redux/tamagotchiSlice';
+} from '@/src/app/lib/redux/tamagotchiSlice';
 import DialogBubble from './DialogBubble';
-import { tamagotchiPhrases, hungryPhrases, sadPhrases, orphanPhrases, getRandomPhrase } from '@/lib/utils/dialogPhrases';
+import { tamagotchiPhrases, hungryPhrases, sadPhrases, orphanPhrases, getRandomPhrase } from '@/src/app/lib/utils/dialogPhrases';
 
 interface Props {
   tamagotchi: Tamagotchi;

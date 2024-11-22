@@ -1,5 +1,5 @@
 import { configureStore } from '@reduxjs/toolkit';
-import tamagotchiReducer from '@/lib/redux/tamagotchiSlice';
+import tamagotchiReducer from '@/src/app/lib/redux/tamagotchiSlice';
 
 export const store = configureStore({
   reducer: {

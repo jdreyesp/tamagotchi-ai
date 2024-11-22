@@ -1,12 +1,12 @@
 'use client'
 
-import CreateTamagotchi from '@/components/CreateTamagotchi';
-import TamagotchiSprite from '@/components/TamagotchiSprite';
-import { CreateTamagotchiInput } from '@/lib/types/tamagotchi';
+import CreateTamagotchi from '@/src/app/components/CreateTamagotchi';
+import TamagotchiSprite from '@/src/app/components/TamagotchiSprite';
+import { CreateTamagotchiInput } from '@/src/app/lib/types/tamagotchi';
 import { useDispatch, useSelector } from 'react-redux';
-import { addTamagotchi, Tamagotchi } from '@/lib/redux/tamagotchiSlice';
-import { RootState } from '@/lib/redux/store';
-import FightArena from '@/components/FightArena';
+import { addTamagotchi, Tamagotchi } from '@/src/app/lib/redux/tamagotchiSlice';
+import { RootState } from '@/src/app/lib/redux/store';
+import FightArena from '@/src/app/components/FightArena';
 
 export default function Home() {
   const dispatch = useDispatch();
@@ -14,7 +14,7 @@ export default function Home() {
 
   const handleCreateTamagotchi = async (data: CreateTamagotchiInput) => {
     try {
-      const newTamagotchi: Omit<Tamagotchi, 'firstName' | 'surname'> = {
+      const newTamagotchi: Tamagotchi = {
         id: Date.now().toString(),
         level: 1,
         hungerLevel: 50,
@@ -22,7 +22,8 @@ export default function Home() {
         healthLevel: 50,
         createdAt: new Date().toISOString(),
         pets: [],
-        firstName: data.name
+        firstName: data.name,
+        surname: ''
       };
 
       dispatch(addTamagotchi(newTamagotchi));

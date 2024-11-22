@@ -1,6 +1,6 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
-import { generateRandomName } from '@/lib/utils/nameGenerator';
-import { isNightTime } from '@/lib/utils/timeUtils';
+import { generateRandomName } from '@/src/app/lib/utils/nameGenerator';
+import { isNightTime } from '@/src/app/lib/utils/timeUtils';
 
 export interface Pet extends Omit<Tamagotchi, 'pets'> {
   parentId: string;
