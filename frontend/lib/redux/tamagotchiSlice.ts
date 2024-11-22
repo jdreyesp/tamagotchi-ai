@@ -5,7 +5,8 @@ import { isNightTime } from '@/lib/utils/timeUtils';
 export interface Pet extends Omit<Tamagotchi, 'pets'> {
   parentId: string;
   isOrphan?: boolean;
-  adoptionTimer?: number; // Time in ms to find new parent before starting to lose stats
+  maturityLevel: number;
+  isFighting?: boolean;
 }
 
 export interface Tamagotchi {
@@ -22,14 +23,22 @@ export interface Tamagotchi {
   lastPetCreatedAt?: string;
 }
 
+interface FightState {
+  isActive: boolean;
+  fighter1?: { petId: string; parentId: string };
+  fighter2?: { petId: string; parentId: string };
+}
+
 interface TamagotchiState {
   tamagotchis: Tamagotchi[];
   deadCount: number;
+  currentFight: FightState;
 }
 
 const initialState: TamagotchiState = {
   tamagotchis: [],
   deadCount: 0,
+  currentFight: { isActive: false }
 };
 
 const clamp = (num: number, min: number, max: number) => 
@@ -133,7 +142,9 @@ const tamagotchiSlice = createSlice({
           healthLevel: 50,
           createdAt: new Date().toISOString(),
           isDead: false,
-          lastPetCreatedAt: undefined
+          lastPetCreatedAt: undefined,
+          maturityLevel: 0,
+          isFighting: false
         };
         
         parent.pets.push(newPet);
@@ -230,6 +241,79 @@ const tamagotchiSlice = createSlice({
         }
       });
     },
+    startFight: (state, action: PayloadAction<{ fighter1: { petId: string; parentId: string }; fighter2: { petId: string; parentId: string } }>) => {
+      const { fighter1, fighter2 } = action.payload;
+      
+      // Find pets
+      const pet1Parent = state.tamagotchis.find(t => t.id === fighter1.parentId);
+      const pet2Parent = state.tamagotchis.find(t => t.id === fighter2.parentId);
+      const pet1 = pet1Parent?.pets.find(p => p.id === fighter1.petId);
+      const pet2 = pet2Parent?.pets.find(p => p.id === fighter2.petId);
+
+      if (pet1 && pet2 && !pet1.isDead && !pet2.isDead && !pet1.isFighting && !pet2.isFighting) {
+        state.currentFight = {
+          isActive: true,
+          fighter1,
+          fighter2
+        };
+        pet1.isFighting = true;
+        pet2.isFighting = true;
+      }
+    },
+    fightRound: (state) => {
+      if (!state.currentFight.isActive || !state.currentFight.fighter1 || !state.currentFight.fighter2) return;
+
+      const pet1Parent = state.tamagotchis.find(t => t.id === state.currentFight.fighter1!.parentId);
+      const pet2Parent = state.tamagotchis.find(t => t.id === state.currentFight.fighter2!.parentId);
+      const pet1 = pet1Parent?.pets.find(p => p.id === state.currentFight.fighter1!.petId);
+      const pet2 = pet2Parent?.pets.find(p => p.id === state.currentFight.fighter2!.petId);
+
+      if (!pet1 || !pet2) return;
+
+      // Both pets deal damage
+      const damage1 = Math.floor(Math.random() * 20) + 10; // 10-30 damage
+      const damage2 = Math.floor(Math.random() * 20) + 10;
+
+      pet1.healthLevel = clamp(pet1.healthLevel - damage2, 0, 100);
+      pet2.healthLevel = clamp(pet2.healthLevel - damage1, 0, 100);
+
+      // Check for winner
+      if (pet1.healthLevel <= 0 || pet2.healthLevel <= 0) {
+        const winner = pet1.healthLevel > 0 ? pet1 : pet2;
+        const loser = pet1.healthLevel > 0 ? pet2 : pet1;
+
+        winner.maturityLevel += 1;
+        loser.isDead = true;
+        state.deadCount += 1;
+
+        // Check if winner should evolve into a Tamagotchi
+        if (winner.maturityLevel >= 3) {
+          const newTamagotchi: Tamagotchi = {
+            id: `${Date.now()}-evolved`,
+            firstName: winner.firstName,
+            surname: winner.surname,
+            level: 1,
+            hungerLevel: winner.hungerLevel,
+            happinessLevel: winner.happinessLevel,
+            healthLevel: 100, // Full health on evolution
+            createdAt: new Date().toISOString(),
+            pets: []
+          };
+          state.tamagotchis.push(newTamagotchi);
+
+          // Remove evolved pet from parent
+          const winnerParent = state.tamagotchis.find(t => t.id === winner.parentId);
+          if (winnerParent) {
+            winnerParent.pets = winnerParent.pets.filter(p => p.id !== winner.id);
+          }
+        }
+
+        // End fight
+        state.currentFight = { isActive: false };
+        pet1.isFighting = false;
+        pet2.isFighting = false;
+      }
+    },
   },
 });
 
@@ -244,5 +328,7 @@ export const {
   orphanSuffering,
   handleParentDeath,
   tryAdoptOrphans,
+  startFight,
+  fightRound,
 } = tamagotchiSlice.actions;
 export default tamagotchiSlice.reducer; 

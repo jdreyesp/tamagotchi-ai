@@ -6,6 +6,7 @@ import { CreateTamagotchiInput } from '@/lib/types/tamagotchi';
 import { useDispatch, useSelector } from 'react-redux';
 import { addTamagotchi, Tamagotchi } from '@/lib/redux/tamagotchiSlice';
 import { RootState } from '@/lib/redux/store';
+import FightArena from '@/components/FightArena';
 
 export default function Home() {
   const dispatch = useDispatch();
@@ -44,6 +45,7 @@ export default function Home() {
           </div>
         ))}
       </div>
+      <FightArena />
     </main>
   );
 } 
