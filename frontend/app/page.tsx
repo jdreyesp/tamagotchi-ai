@@ -24,7 +24,6 @@ export default function Home() {
       };
 
       dispatch(addTamagotchi(newTamagotchi));
-      console.log('Created Tamagotchi:', newTamagotchi);
     } catch (error) {
       console.error('Error creating Tamagotchi:', error);
     }

@@ -1,10 +1,19 @@
 'use client';
 
 import { useSpring, animated, config } from '@react-spring/web';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Tamagotchi } from '@/lib/redux/tamagotchiSlice';
 import { useDispatch } from 'react-redux';
-import { feedTamagotchi, trainTamagotchi, removeTamagotchi } from '@/lib/redux/tamagotchiSlice';
+import { 
+  feedTamagotchi, 
+  trainTamagotchi, 
+  removeTamagotchi, 
+  createPet, 
+  carePet,
+  calculatePetCreationDelay,
+  decreaseHunger,
+  decreasePetHunger
+} from '@/lib/redux/tamagotchiSlice';
 
 interface Props {
   tamagotchi: Tamagotchi;
@@ -72,6 +81,66 @@ export default function TamagotchiSprite({ tamagotchi }: Props) {
     ...jumpAnimation,
     ...deathAnimation,
   };
+
+  // Pet creation interval
+  useEffect(() => {
+    if (tamagotchi.isDead) return;
+
+    const checkAndCreatePet = () => {
+      const delay = calculatePetCreationDelay(tamagotchi);
+      const lastPetTime = tamagotchi.lastPetCreatedAt 
+        ? new Date(tamagotchi.lastPetCreatedAt).getTime() 
+        : 0;
+      
+      if (Date.now() - lastPetTime >= delay) {
+        dispatch(createPet(tamagotchi.id));
+      }
+    };
+
+    const interval = setInterval(checkAndCreatePet, 1000);
+    return () => clearInterval(interval);
+  }, [tamagotchi, dispatch]);
+
+  // Pet care interval
+  useEffect(() => {
+    if (tamagotchi.isDead || !tamagotchi.pets?.length) return;
+
+    const interval = setInterval(() => {
+      tamagotchi.pets.forEach(pet => {
+        if (!pet.isDead) {
+          dispatch(carePet({ parentId: tamagotchi.id, petId: pet.id }));
+        }
+      });
+    }, 5000); // Care for pets every 5 seconds
+
+    return () => clearInterval(interval);
+  }, [tamagotchi, dispatch]);
+
+  // Hunger decrease interval for Tamagotchi
+  useEffect(() => {
+    if (tamagotchi.isDead) return;
+
+    const interval = setInterval(() => {
+      dispatch(decreaseHunger(tamagotchi.id));
+    }, 30 * 60 * 1000); // 30 minutes
+
+    return () => clearInterval(interval);
+  }, [tamagotchi.id, dispatch]);
+
+  // Hunger decrease interval for Pets
+  useEffect(() => {
+    if (tamagotchi.isDead || !tamagotchi.pets?.length) return;
+
+    const interval = setInterval(() => {
+      tamagotchi.pets.forEach(pet => {
+        if (!pet.isDead) {
+          dispatch(decreasePetHunger({ parentId: tamagotchi.id, petId: pet.id }));
+        }
+      });
+    }, 60 * 1000); // 1 minute
+
+    return () => clearInterval(interval);
+  }, [tamagotchi, dispatch]);
 
   return (
     <div className="relative flex flex-col items-center">
@@ -187,7 +256,7 @@ export default function TamagotchiSprite({ tamagotchi }: Props) {
             fontSize="12"
             fontFamily="Arial"
           >
-            {tamagotchi.name}
+            {`${tamagotchi.firstName} ${tamagotchi.surname}`}
           </text>
         </animated.svg>
 
@@ -273,6 +342,152 @@ export default function TamagotchiSprite({ tamagotchi }: Props) {
             </svg>
           </button>
         )}
+      </div>
+
+      {/* Pets Display */}
+      <div className="absolute left-full ml-4 space-y-4">
+        {tamagotchi.pets?.map((pet) => (
+          <div key={pet.id} className="relative flex items-center gap-2">
+            {/* Pet Stats */}
+            <div className="grid grid-cols-1 gap-1 text-xs">
+              <div className="flex items-center justify-between w-20">
+                <div className="flex items-center">
+                  <span className="w-2 h-2 bg-red-500 rounded-full"></span>
+                  <span className="ml-1 font-medium">Health</span>
+                </div>
+                <span>{pet.healthLevel}</span>
+              </div>
+              <div className="flex items-center justify-between w-20">
+                <div className="flex items-center">
+                  <span className="w-2 h-2 bg-yellow-500 rounded-full"></span>
+                  <span className="ml-1 font-medium">Hunger</span>
+                </div>
+                <span>{pet.hungerLevel}</span>
+              </div>
+              <div className="flex items-center justify-between w-20">
+                <div className="flex items-center">
+                  <span className="w-2 h-2 bg-pink-500 rounded-full"></span>
+                  <span className="ml-1 font-medium">Happy</span>
+                </div>
+                <span>{pet.happinessLevel}</span>
+              </div>
+            </div>
+
+            {/* Pet Sprite */}
+            <animated.svg
+              width="50"
+              height="50"
+              viewBox="0 0 100 100"
+              className={`${pet.isDead ? 'opacity-50' : ''} transition-transform`}
+              style={{
+                transform: pet.hungerLevel <= 30 ? 'scale(0.95)' : 'scale(1)',
+                transition: 'transform 0.3s ease-in-out'
+              }}
+            >
+              {/* Mini Tamagotchi body */}
+              <circle 
+                cx="50" 
+                cy="50" 
+                r="30" 
+                fill={pet.isDead ? "#cccccc" : "#FFB6C1"} 
+              />
+              
+              {/* Mini arms - show training state */}
+              <path
+                d={pet.healthLevel >= 70 
+                  ? "M20 65 Q 35 60 40 65" 
+                  : "M20 65 Q 35 65 40 65"
+                }
+                stroke="black"
+                strokeWidth={pet.healthLevel >= 70 ? "3" : "1.5"}
+                fill="none"
+              />
+              <path
+                d={pet.healthLevel >= 70 
+                  ? "M80 65 Q 65 60 60 65" 
+                  : "M80 65 Q 65 65 60 65"
+                }
+                stroke="black"
+                strokeWidth={pet.healthLevel >= 70 ? "3" : "1.5"}
+                fill="none"
+              />
+              
+              {/* Mini eyes - show eating state */}
+              <circle 
+                cx="40" 
+                cy="45" 
+                r="4" 
+                fill="black" 
+                style={{ 
+                  transform: pet.hungerLevel <= 30 ? 'scaleY(0.5)' : 'none',
+                  transformOrigin: '40px 45px'
+                }}
+              />
+              <circle 
+                cx="60" 
+                cy="45" 
+                r="4" 
+                fill="black"
+                style={{ 
+                  transform: pet.hungerLevel <= 30 ? 'scaleY(0.5)' : 'none',
+                  transformOrigin: '60px 45px'
+                }}
+              />
+              
+              {/* Mini mouth - changes based on happiness */}
+              <path
+                d={pet.happinessLevel >= 70 
+                  ? "M 40 60 Q 50 70 60 60"  // Happy mouth
+                  : pet.happinessLevel <= 30
+                    ? "M 40 65 Q 50 60 60 65"  // Sad mouth
+                    : "M 40 60 Q 50 65 60 60"  // Neutral mouth
+                }
+                fill="none"
+                stroke="black"
+                strokeWidth="2"
+              />
+
+              {/* Activity indicator */}
+              {pet.hungerLevel <= 30 && (
+                <circle 
+                  cx="80" 
+                  cy="20" 
+                  r="5" 
+                  fill="#FFB6C1"
+                  opacity={0.7}
+                >
+                  <animate
+                    attributeName="opacity"
+                    values="0.7;0.3;0.7"
+                    dur="1s"
+                    repeatCount="indefinite"
+                  />
+                </circle>
+              )}
+              {pet.healthLevel < 70 && (
+                <circle 
+                  cx="20" 
+                  cy="20" 
+                  r="5" 
+                  fill="#90CDF4"
+                  opacity={0.7}
+                >
+                  <animate
+                    attributeName="opacity"
+                    values="0.7;0.3;0.7"
+                    dur="1s"
+                    repeatCount="indefinite"
+                  />
+                </circle>
+              )}
+            </animated.svg>
+
+            {/* Pet name */}
+            <span className="text-xs text-gray-600 absolute -bottom-4 left-1/2 transform -translate-x-1/2">
+              {`${pet.firstName} ${pet.surname}`}
+            </span>
+          </div>
+        ))}
       </div>
     </div>
   );
