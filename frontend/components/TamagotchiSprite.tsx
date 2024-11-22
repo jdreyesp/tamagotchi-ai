@@ -4,7 +4,7 @@ import { useSpring, animated, config } from '@react-spring/web';
 import { useState, useEffect } from 'react';
 import { Tamagotchi } from '@/lib/redux/tamagotchiSlice';
 import { useDispatch } from 'react-redux';
-import { feedTamagotchi, removeTamagotchi } from '@/lib/redux/tamagotchiSlice';
+import { feedTamagotchi, trainTamagotchi, removeTamagotchi } from '@/lib/redux/tamagotchiSlice';
 
 interface Props {
   tamagotchi: Tamagotchi;
@@ -13,6 +13,7 @@ interface Props {
 export default function TamagotchiSprite({ tamagotchi }: Props) {
   const [isJumping, setIsJumping] = useState(false);
   const [isEating, setIsEating] = useState(false);
+  const [isTraining, setIsTraining] = useState(false);
   const dispatch = useDispatch();
 
   // Death animation with onRest callback
@@ -39,6 +40,13 @@ export default function TamagotchiSprite({ tamagotchi }: Props) {
     setTimeout(() => setIsEating(false), 1000);
   };
 
+  const handleTrain = () => {
+    if (tamagotchi.isDead) return;
+    setIsTraining(true);
+    dispatch(trainTamagotchi(tamagotchi.id));
+    setTimeout(() => setIsTraining(false), 1000);
+  };
+
   // Animations...
   const idleAnimation = useSpring({
     from: { transform: 'translateY(0px)' },
@@ -49,6 +57,12 @@ export default function TamagotchiSprite({ tamagotchi }: Props) {
 
   const jumpAnimation = useSpring({
     transform: isJumping ? 'translateY(-20px)' : 'translateY(0px)',
+    config: { tension: 300, friction: 10 },
+  });
+
+  // Add arm flex animation
+  const armAnimation = useSpring({
+    transform: isTraining ? 'rotate(-45deg)' : 'rotate(0deg)',
     config: { tension: 300, friction: 10 },
   });
 
@@ -102,6 +116,28 @@ export default function TamagotchiSprite({ tamagotchi }: Props) {
             fill={tamagotchi.isDead ? "#cccccc" : "#FFB6C1"} 
           />
           
+          {/* Arms - they get buffer at high health - MOVED BEFORE FACE */}
+          <animated.path
+            d={tamagotchi.healthLevel >= 100 
+              ? "M20 65 Q 35 60 40 65" // Muscular arm, moved lower
+              : "M20 65 Q 35 65 40 65" // Normal arm, moved lower
+            }
+            stroke="black"
+            strokeWidth={tamagotchi.healthLevel >= 100 ? "4" : "2"}
+            fill="none"
+            style={armAnimation}
+          />
+          <animated.path
+            d={tamagotchi.healthLevel >= 100 
+              ? "M80 65 Q 65 60 60 65" // Muscular arm, moved lower
+              : "M80 65 Q 65 65 60 65" // Normal arm, moved lower
+            }
+            stroke="black"
+            strokeWidth={tamagotchi.healthLevel >= 100 ? "4" : "2"}
+            fill="none"
+            style={armAnimation}
+          />
+
           {/* Eyes */}
           {tamagotchi.isDead ? (
             // X eyes for dead state
@@ -201,6 +237,39 @@ export default function TamagotchiSprite({ tamagotchi }: Props) {
                 strokeWidth="1"
                 strokeLinecap="round"
               />
+            </svg>
+          </button>
+        )}
+
+        {/* Training Button */}
+        {!tamagotchi.isDead && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              handleTrain();
+            }}
+            className="absolute -left-8 top-1/2 transform -translate-y-1/2 p-2 bg-blue-100 rounded-full hover:bg-blue-200 transition-colors"
+            title="Train Tamagotchi"
+          >
+            <svg
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              className="text-blue-600"
+            >
+              {/* Dumbbell */}
+              <path
+                d="M6 8L18 8"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+              />
+              {/* Left weight */}
+              <rect x="2" y="6" width="4" height="4" fill="currentColor" />
+              {/* Right weight */}
+              <rect x="18" y="6" width="4" height="4" fill="currentColor" />
             </svg>
           </button>
         )}

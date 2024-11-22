@@ -49,8 +49,23 @@ const tamagotchiSlice = createSlice({
     removeTamagotchi: (state, action: PayloadAction<string>) => {
       state.tamagotchis = state.tamagotchis.filter(t => t.id !== action.payload);
     },
+    trainTamagotchi: (state, action: PayloadAction<string>) => {
+      const tamagotchi = state.tamagotchis.find(t => t.id === action.payload);
+      if (tamagotchi) {
+        // Apply training effects
+        tamagotchi.hungerLevel = clamp(tamagotchi.hungerLevel + 5, 0, 100);
+        tamagotchi.happinessLevel = clamp(tamagotchi.happinessLevel - 10, 0, 100);
+        tamagotchi.healthLevel = clamp(tamagotchi.healthLevel + 10, 0, 100);
+        
+        // Check for death
+        if (tamagotchi.healthLevel <= 0 && !tamagotchi.isDead) {
+          tamagotchi.isDead = true;
+          state.deadCount += 1;
+        }
+      }
+    },
   },
 });
 
-export const { addTamagotchi, feedTamagotchi, removeTamagotchi } = tamagotchiSlice.actions;
+export const { addTamagotchi, feedTamagotchi, removeTamagotchi, trainTamagotchi } = tamagotchiSlice.actions;
 export default tamagotchiSlice.reducer; 
