@@ -15,6 +15,8 @@ import {
   orphanSuffering,
   tryAdoptOrphans
 } from '@/lib/redux/tamagotchiSlice';
+import DialogBubble from './DialogBubble';
+import { tamagotchiPhrases, hungryPhrases, sadPhrases, orphanPhrases, getRandomPhrase } from '@/lib/utils/dialogPhrases';
 
 interface Props {
   tamagotchi: Tamagotchi;
@@ -37,6 +39,9 @@ export default function TamagotchiSprite({ tamagotchi }: Props) {
   const [isTraining, setIsTraining] = useState(false);
   const dispatch = useDispatch();
   const [, forceUpdate] = useState({});
+  const [showDialog, setShowDialog] = useState(false);
+  const [dialogMessage, setDialogMessage] = useState('');
+  const [petDialogs, setPetDialogs] = useState<Record<string, { show: boolean; message: string }>>({});
 
   // Create a single spring for all pets
   const petDeathAnimation = useSpring(getPetDeathStyle(false));
@@ -181,6 +186,66 @@ export default function TamagotchiSprite({ tamagotchi }: Props) {
     return () => clearInterval(interval);
   }, []);
 
+  // Random dialog effect
+  useEffect(() => {
+    const showRandomDialog = () => {
+      if (tamagotchi.isDead) return;
+
+      let phrases = tamagotchiPhrases;
+      if (tamagotchi.hungerLevel >= 80) {
+        phrases = hungryPhrases;
+      } else if (tamagotchi.happinessLevel <= 30) {
+        phrases = sadPhrases;
+      }
+
+      setDialogMessage(getRandomPhrase(phrases));
+      setShowDialog(true);
+      setTimeout(() => setShowDialog(false), 3000);
+    };
+
+    const interval = setInterval(showRandomDialog, 10000 + Math.random() * 10000);
+    return () => clearInterval(interval);
+  }, [tamagotchi.isDead, tamagotchi.hungerLevel, tamagotchi.happinessLevel]);
+
+  // Random dialog effect for pets
+  useEffect(() => {
+    if (!tamagotchi.pets?.length) return;
+
+    const intervals: NodeJS.Timeout[] = [];
+
+    tamagotchi.pets.forEach(pet => {
+      const showRandomDialog = () => {
+        if (pet.isDead) return;
+
+        let phrases = tamagotchiPhrases;
+        if (pet.hungerLevel >= 80) {
+          phrases = hungryPhrases;
+        } else if (pet.happinessLevel <= 30) {
+          phrases = sadPhrases;
+        } else if (pet.isOrphan) {
+          phrases = orphanPhrases;
+        }
+
+        setPetDialogs(prev => ({
+          ...prev,
+          [pet.id]: { show: true, message: getRandomPhrase(phrases) }
+        }));
+
+        setTimeout(() => {
+          setPetDialogs(prev => ({
+            ...prev,
+            [pet.id]: { ...prev[pet.id], show: false }
+          }));
+        }, 3000);
+      };
+
+      const interval = setInterval(showRandomDialog, 15000 + Math.random() * 10000);
+      intervals.push(interval);
+    });
+
+    return () => intervals.forEach(clearInterval);
+  }, [tamagotchi.pets]);
+
   return (
     <div className="relative flex flex-col items-center">
       {/* Stats Display */}
@@ -209,6 +274,7 @@ export default function TamagotchiSprite({ tamagotchi }: Props) {
       </div>
 
       <div className="relative" onClick={() => !tamagotchi.isDead && setIsJumping(!isJumping)}>
+        {showDialog && <DialogBubble message={dialogMessage} />}
         <animated.svg
           style={combinedAnimation}
           width="100"
@@ -394,6 +460,12 @@ export default function TamagotchiSprite({ tamagotchi }: Props) {
           
           return (
             <div key={pet.id} className="relative flex items-center gap-2">
+              {petDialogs[pet.id]?.show && (
+                <DialogBubble 
+                  message={petDialogs[pet.id]?.message || ''} 
+                  position="left" 
+                />
+              )}
               {/* Pet Stats */}
               <div className="grid grid-cols-1 gap-1 text-xs">
                 <div className="flex items-center justify-between w-20">
