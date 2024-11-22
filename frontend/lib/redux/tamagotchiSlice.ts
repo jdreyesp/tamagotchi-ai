@@ -4,6 +4,8 @@ import { isNightTime } from '@/lib/utils/timeUtils';
 
 export interface Pet extends Omit<Tamagotchi, 'pets'> {
   parentId: string;
+  isOrphan?: boolean;
+  adoptionTimer?: number; // Time in ms to find new parent before starting to lose stats
 }
 
 export interface Tamagotchi {
@@ -53,15 +55,29 @@ export const calculatePetCreationDelay = (tamagotchi: Tamagotchi): number => {
 
 const MAX_PETS = 3;
 
+const checkForDeath = (entity: Tamagotchi | Pet) => {
+  return entity.healthLevel <= 0 || entity.happinessLevel <= 0 || entity.hungerLevel >= 100;
+};
+
+const handleOrphanLogic = (state: TamagotchiState, parentId: string) => {
+  const deadParent = state.tamagotchis.find(t => t.id === parentId);
+  if (deadParent && deadParent.pets) {
+    deadParent.pets.forEach(pet => {
+      if (!pet.isDead) {
+        pet.isOrphan = true;
+      }
+    });
+  }
+};
+
 const tamagotchiSlice = createSlice({
   name: 'tamagotchi',
   initialState,
   reducers: {
-    addTamagotchi: (state, action: PayloadAction<Omit<Tamagotchi, 'surname' | 'firstName'>>) => {
-      const { firstName, surname } = generateRandomName();
+    addTamagotchi: (state, action: PayloadAction<Omit<Tamagotchi, 'surname'> & { firstName: string }>) => {
+      const { surname } = generateRandomName();
       state.tamagotchis.push({
         ...action.payload,
-        firstName,
         surname,
         pets: []
       });
@@ -69,15 +85,14 @@ const tamagotchiSlice = createSlice({
     feedTamagotchi: (state, action: PayloadAction<string>) => {
       const tamagotchi = state.tamagotchis.find(t => t.id === action.payload);
       if (tamagotchi) {
-        // Apply feeding effects
         tamagotchi.hungerLevel = clamp(tamagotchi.hungerLevel - 10, 0, 100);
         tamagotchi.happinessLevel = clamp(tamagotchi.happinessLevel + 5, 0, 100);
         tamagotchi.healthLevel = clamp(tamagotchi.healthLevel - 5, 0, 100);
         
-        // Check for death
-        if (tamagotchi.healthLevel <= 0 && !tamagotchi.isDead) {
+        if (checkForDeath(tamagotchi) && !tamagotchi.isDead) {
           tamagotchi.isDead = true;
           state.deadCount += 1;
+          handleOrphanLogic(state, tamagotchi.id);
         }
       }
     },
@@ -87,15 +102,14 @@ const tamagotchiSlice = createSlice({
     trainTamagotchi: (state, action: PayloadAction<string>) => {
       const tamagotchi = state.tamagotchis.find(t => t.id === action.payload);
       if (tamagotchi) {
-        // Apply training effects
         tamagotchi.hungerLevel = clamp(tamagotchi.hungerLevel + 5, 0, 100);
         tamagotchi.happinessLevel = clamp(tamagotchi.happinessLevel - 10, 0, 100);
         tamagotchi.healthLevel = clamp(tamagotchi.healthLevel + 10, 0, 100);
         
-        // Check for death
-        if (tamagotchi.healthLevel <= 0 && !tamagotchi.isDead) {
+        if (checkForDeath(tamagotchi) && !tamagotchi.isDead) {
           tamagotchi.isDead = true;
           state.deadCount += 1;
+          handleOrphanLogic(state, tamagotchi.id);
         }
       }
     },
@@ -141,8 +155,7 @@ const tamagotchiSlice = createSlice({
             pet.hungerLevel = clamp(pet.hungerLevel + 5, 0, 100);
           }
           
-          // Check for death
-          if (pet.healthLevel <= 0 && !pet.isDead) {
+          if (checkForDeath(pet) && !pet.isDead) {
             pet.isDead = true;
             state.deadCount += 1;
           }
@@ -152,31 +165,70 @@ const tamagotchiSlice = createSlice({
     decreaseHunger: (state, action: PayloadAction<string>) => {
       const tamagotchi = state.tamagotchis.find(t => t.id === action.payload);
       if (tamagotchi && !tamagotchi.isDead) {
-        // Decrease hunger based on time of day
         const hungerDecrease = isNightTime() ? 1 : 5;
         tamagotchi.hungerLevel = clamp(tamagotchi.hungerLevel - hungerDecrease, 0, 100);
 
-        // Check for death if hunger reaches 0
-        if (tamagotchi.hungerLevel <= 0 && !tamagotchi.isDead) {
+        if (checkForDeath(tamagotchi) && !tamagotchi.isDead) {
           tamagotchi.isDead = true;
           state.deadCount += 1;
+          handleOrphanLogic(state, tamagotchi.id);
         }
       }
     },
-    decreasePetHunger: (state, action: PayloadAction<{ parentId: string, petId: string }>) => {
+    orphanSuffering: (state, action: PayloadAction<{ parentId: string, petId: string }>) => {
       const parent = state.tamagotchis.find(t => t.id === action.payload.parentId);
       if (parent) {
         const pet = parent.pets?.find(p => p.id === action.payload.petId);
         if (pet && !pet.isDead) {
-          pet.hungerLevel = clamp(pet.hungerLevel - 5, 0, 100);
+          if (pet.isOrphan) {
+            // Orphans suffer more over time
+            pet.hungerLevel = clamp(pet.hungerLevel + 10, 0, 100);
+            pet.healthLevel = clamp(pet.healthLevel - 5, 0, 100);
+            pet.happinessLevel = clamp(pet.happinessLevel - 5, 0, 100);
+          } else {
+            // Normal pets lose hunger over time
+            pet.hungerLevel = clamp(pet.hungerLevel - 5, 0, 100);
+          }
 
-          // Check for death if hunger reaches 0
-          if (pet.hungerLevel <= 0 && !pet.isDead) {
+          // Check for death with new conditions
+          if (checkForDeath(pet) && !pet.isDead) {
             pet.isDead = true;
             state.deadCount += 1;
           }
         }
       }
+    },
+    handleParentDeath: (state, action: PayloadAction<string>) => {
+      const deadParent = state.tamagotchis.find(t => t.id === action.payload);
+      if (deadParent && deadParent.pets) {
+        deadParent.pets.forEach(pet => {
+          if (!pet.isDead) {
+            pet.isOrphan = true;
+          }
+        });
+      }
+    },
+    tryAdoptOrphans: (state) => {
+      const availableParents = state.tamagotchis.filter(t => !t.isDead && t.pets.length < MAX_PETS);
+      
+      state.tamagotchis.forEach(parent => {
+        if (parent.isDead && parent.pets) {
+          parent.pets.forEach(pet => {
+            if (pet.isOrphan && !pet.isDead) {
+              // Try to find new parent
+              const newParent = availableParents.find(p => p.pets.length < MAX_PETS);
+              if (newParent) {
+                // Remove from old parent
+                parent.pets = parent.pets.filter(p => p.id !== pet.id);
+                // Add to new parent
+                pet.isOrphan = false;
+                pet.parentId = newParent.id;
+                newParent.pets.push(pet);
+              }
+            }
+          });
+        }
+      });
     },
   },
 });
@@ -189,6 +241,8 @@ export const {
   createPet,
   carePet,
   decreaseHunger,
-  decreasePetHunger
+  orphanSuffering,
+  handleParentDeath,
+  tryAdoptOrphans,
 } = tamagotchiSlice.actions;
 export default tamagotchiSlice.reducer; 

@@ -4,7 +4,7 @@ import CreateTamagotchi from '@/components/CreateTamagotchi';
 import TamagotchiSprite from '@/components/TamagotchiSprite';
 import { CreateTamagotchiInput } from '@/lib/types/tamagotchi';
 import { useDispatch, useSelector } from 'react-redux';
-import { addTamagotchi } from '@/lib/redux/tamagotchiSlice';
+import { addTamagotchi, Tamagotchi } from '@/lib/redux/tamagotchiSlice';
 import { RootState } from '@/lib/redux/store';
 
 export default function Home() {
@@ -13,14 +13,15 @@ export default function Home() {
 
   const handleCreateTamagotchi = async (data: CreateTamagotchiInput) => {
     try {
-      const newTamagotchi = {
+      const newTamagotchi: Omit<Tamagotchi, 'firstName' | 'surname'> = {
         id: Date.now().toString(),
-        name: data.name,
         level: 1,
         hungerLevel: 50,
         happinessLevel: 50,
         healthLevel: 50,
         createdAt: new Date().toISOString(),
+        pets: [],
+        firstName: data.name
       };
 
       dispatch(addTamagotchi(newTamagotchi));
@@ -34,7 +35,7 @@ export default function Home() {
       <CreateTamagotchi onCreateTamagotchi={handleCreateTamagotchi} />
       
       <div className="mt-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {tamagotchis.map((tamagotchi) => (
+        {tamagotchis.map((tamagotchi: Tamagotchi) => (
           <div 
             key={tamagotchi.id}
             className="p-4 border rounded-lg shadow-md hover:shadow-lg transition-shadow"

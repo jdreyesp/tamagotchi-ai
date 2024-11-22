@@ -12,34 +12,44 @@ import {
   carePet,
   calculatePetCreationDelay,
   decreaseHunger,
-  decreasePetHunger
+  orphanSuffering,
+  tryAdoptOrphans
 } from '@/lib/redux/tamagotchiSlice';
 
 interface Props {
   tamagotchi: Tamagotchi;
 }
 
+// Move animation config outside component
+const getPetDeathStyle = (isDead: boolean) => ({
+  opacity: isDead ? 0.5 : 1,
+  transform: isDead ? 'rotate(360deg)' : 'rotate(0deg)',
+  config: { 
+    tension: 100,
+    friction: 20,
+    duration: 2000
+  }
+});
+
 export default function TamagotchiSprite({ tamagotchi }: Props) {
   const [isJumping, setIsJumping] = useState(false);
   const [isEating, setIsEating] = useState(false);
   const [isTraining, setIsTraining] = useState(false);
   const dispatch = useDispatch();
+  const [, forceUpdate] = useState({});
 
-  // Death animation with onRest callback
+  // Create a single spring for all pets
+  const petDeathAnimation = useSpring(getPetDeathStyle(false));
+
+  // Death animation without removal
   const deathAnimation = useSpring({
-    opacity: tamagotchi.isDead ? 0 : 1,
-    transform: tamagotchi.isDead ? 'rotate(360deg) scale(0)' : 'rotate(0deg) scale(1)',
+    opacity: tamagotchi.isDead ? 0.5 : 1,
+    transform: tamagotchi.isDead ? 'rotate(360deg)' : 'rotate(0deg)',
     config: { 
       tension: 100,
       friction: 20,
       duration: 2000
-    },
-    onRest: () => {
-      // Only dispatch removeTamagotchi when the death animation finishes
-      if (tamagotchi.isDead) {
-        dispatch(removeTamagotchi(tamagotchi.id));
-      }
-    },
+    }
   });
 
   const handleFeed = () => {
@@ -129,18 +139,47 @@ export default function TamagotchiSprite({ tamagotchi }: Props) {
 
   // Hunger decrease interval for Pets
   useEffect(() => {
-    if (tamagotchi.isDead || !tamagotchi.pets?.length) return;
+    if (!tamagotchi.pets?.length) return;
 
     const interval = setInterval(() => {
       tamagotchi.pets.forEach(pet => {
         if (!pet.isDead) {
-          dispatch(decreasePetHunger({ parentId: tamagotchi.id, petId: pet.id }));
+          // If pet is orphaned, decrease stats more aggressively
+          if (pet.isOrphan) {
+            dispatch(orphanSuffering({ parentId: tamagotchi.id, petId: pet.id }));
+          } else if (!tamagotchi.isDead) {
+            // Only decrease stats for non-orphaned pets if parent is alive
+            dispatch(orphanSuffering({ parentId: tamagotchi.id, petId: pet.id }));
+          }
         }
       });
-    }, 60 * 1000); // 1 minute
+    }, 10 * 1000); // Every 10 seconds
 
     return () => clearInterval(interval);
   }, [tamagotchi, dispatch]);
+
+  // Add orphan check interval - only when there are orphaned pets
+  useEffect(() => {
+    // Check if this tamagotchi has any orphaned pets
+    const hasOrphanPets = tamagotchi.pets?.some(pet => pet.isOrphan && !pet.isDead);
+    
+    if (!hasOrphanPets) return;
+
+    const interval = setInterval(() => {
+      dispatch(tryAdoptOrphans());
+    }, 5000); // Check every 5 seconds
+
+    return () => clearInterval(interval);
+  }, [tamagotchi.pets, dispatch]);
+
+  // Add timer to update orphan countdown
+  useEffect(() => {
+    const interval = setInterval(() => {
+      forceUpdate({});  // Force re-render every second to update timer display
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, []);
 
   return (
     <div className="relative flex flex-col items-center">
@@ -346,148 +385,184 @@ export default function TamagotchiSprite({ tamagotchi }: Props) {
 
       {/* Pets Display */}
       <div className="absolute left-full ml-4 space-y-4">
-        {tamagotchi.pets?.map((pet) => (
-          <div key={pet.id} className="relative flex items-center gap-2">
-            {/* Pet Stats */}
-            <div className="grid grid-cols-1 gap-1 text-xs">
-              <div className="flex items-center justify-between w-20">
-                <div className="flex items-center">
-                  <span className="w-2 h-2 bg-red-500 rounded-full"></span>
-                  <span className="ml-1 font-medium">Health</span>
+        {tamagotchi.pets?.map((pet) => {
+          // Update animation when pet dies
+          if (pet.isDead) {
+            petDeathAnimation.opacity.set(0.5);
+            petDeathAnimation.transform.set('rotate(360deg)');
+          }
+          
+          return (
+            <div key={pet.id} className="relative flex items-center gap-2">
+              {/* Pet Stats */}
+              <div className="grid grid-cols-1 gap-1 text-xs">
+                <div className="flex items-center justify-between w-20">
+                  <div className="flex items-center">
+                    <span className="w-2 h-2 bg-red-500 rounded-full"></span>
+                    <span className="ml-1 font-medium">Health</span>
+                  </div>
+                  <span>{pet.healthLevel}</span>
                 </div>
-                <span>{pet.healthLevel}</span>
-              </div>
-              <div className="flex items-center justify-between w-20">
-                <div className="flex items-center">
-                  <span className="w-2 h-2 bg-yellow-500 rounded-full"></span>
-                  <span className="ml-1 font-medium">Hunger</span>
+                <div className="flex items-center justify-between w-20">
+                  <div className="flex items-center">
+                    <span className="w-2 h-2 bg-yellow-500 rounded-full"></span>
+                    <span className="ml-1 font-medium">Hunger</span>
+                  </div>
+                  <span>{pet.hungerLevel}</span>
                 </div>
-                <span>{pet.hungerLevel}</span>
-              </div>
-              <div className="flex items-center justify-between w-20">
-                <div className="flex items-center">
-                  <span className="w-2 h-2 bg-pink-500 rounded-full"></span>
-                  <span className="ml-1 font-medium">Happy</span>
+                <div className="flex items-center justify-between w-20">
+                  <div className="flex items-center">
+                    <span className="w-2 h-2 bg-pink-500 rounded-full"></span>
+                    <span className="ml-1 font-medium">Happy</span>
+                  </div>
+                  <span>{pet.happinessLevel}</span>
                 </div>
-                <span>{pet.happinessLevel}</span>
               </div>
+
+              {/* Pet Sprite */}
+              <animated.svg
+                width="50"
+                height="50"
+                viewBox="0 0 100 100"
+                className={`${pet.isDead ? 'pointer-events-none' : ''} transition-transform`}
+                style={{
+                  ...petDeathAnimation,
+                  transform: pet.hungerLevel <= 30 ? 'scale(0.95)' : 'scale(1)',
+                  transition: 'transform 0.3s ease-in-out'
+                }}
+              >
+                {/* Mini Tamagotchi body */}
+                <circle 
+                  cx="50" 
+                  cy="50" 
+                  r="30" 
+                  fill={pet.isDead ? "#cccccc" : "#FFB6C1"} 
+                />
+                
+                {/* Mini arms */}
+                <path
+                  d={pet.healthLevel >= 70 
+                    ? "M20 65 Q 35 60 40 65" 
+                    : "M20 65 Q 35 65 40 65"
+                  }
+                  stroke="black"
+                  strokeWidth={pet.healthLevel >= 70 ? "3" : "1.5"}
+                  fill="none"
+                />
+                <path
+                  d={pet.healthLevel >= 70 
+                    ? "M80 65 Q 65 60 60 65" 
+                    : "M80 65 Q 65 65 60 65"
+                  }
+                  stroke="black"
+                  strokeWidth={pet.healthLevel >= 70 ? "3" : "1.5"}
+                  fill="none"
+                />
+                
+                {/* Mini eyes */}
+                {pet.isDead ? (
+                  // X eyes for dead state
+                  <>
+                    <path d="M35 40 L45 50 M45 40 L35 50" stroke="black" strokeWidth="2" />
+                    <path d="M55 40 L65 50 M65 40 L55 50" stroke="black" strokeWidth="2" />
+                  </>
+                ) : (
+                  // Normal eyes
+                  <>
+                    <circle 
+                      cx="40" 
+                      cy="45" 
+                      r="4" 
+                      fill="black" 
+                      style={{ 
+                        transform: pet.hungerLevel <= 30 ? 'scaleY(0.5)' : 'none',
+                        transformOrigin: '40px 45px'
+                      }}
+                    />
+                    <circle 
+                      cx="60" 
+                      cy="45" 
+                      r="4" 
+                      fill="black"
+                      style={{ 
+                        transform: pet.hungerLevel <= 30 ? 'scaleY(0.5)' : 'none',
+                        transformOrigin: '60px 45px'
+                      }}
+                    />
+                  </>
+                )}
+                
+                {/* Mini mouth - changes based on happiness or death */}
+                <path
+                  d={pet.isDead
+                    ? "M 40 65 Q 50 60 60 65" // Sad mouth for dead state
+                    : pet.happinessLevel >= 70 
+                      ? "M 40 60 Q 50 70 60 60"  // Happy mouth
+                      : pet.happinessLevel <= 30
+                        ? "M 40 65 Q 50 60 60 65"  // Sad mouth
+                        : "M 40 60 Q 50 65 60 60"  // Neutral mouth
+                  }
+                  fill="none"
+                  stroke="black"
+                  strokeWidth="2"
+                />
+
+                {/* Activity indicators only show if pet is alive */}
+                {!pet.isDead && (
+                  <>
+                    {pet.hungerLevel <= 30 && (
+                      <circle 
+                        cx="80" 
+                        cy="20" 
+                        r="5" 
+                        fill="#FFB6C1"
+                        opacity={0.7}
+                      >
+                        <animate
+                          attributeName="opacity"
+                          values="0.7;0.3;0.7"
+                          dur="1s"
+                          repeatCount="indefinite"
+                        />
+                      </circle>
+                    )}
+                    {pet.healthLevel < 70 && (
+                      <circle 
+                        cx="20" 
+                        cy="20" 
+                        r="5" 
+                        fill="#90CDF4"
+                        opacity={0.7}
+                      >
+                        <animate
+                          attributeName="opacity"
+                          values="0.7;0.3;0.7"
+                          dur="1s"
+                          repeatCount="indefinite"
+                        />
+                      </circle>
+                    )}
+                  </>
+                )}
+              </animated.svg>
+
+              {/* Pet name */}
+              <span className="text-xs text-gray-600 absolute -bottom-4 left-1/2 transform -translate-x-1/2 flex flex-col items-center">
+                <span>{`${pet.firstName} ${pet.surname}`}</span>
+                {pet.isOrphan && (
+                  <span className="text-red-500 font-medium mt-1">
+                    Orphan
+                  </span>
+                )}
+              </span>
+
+              {/* Add visual indicator for orphan pets */}
+              {pet.isOrphan && (
+                <div className="absolute -top-2 -right-2 w-4 h-4 bg-red-500 rounded-full animate-pulse" />
+              )}
             </div>
-
-            {/* Pet Sprite */}
-            <animated.svg
-              width="50"
-              height="50"
-              viewBox="0 0 100 100"
-              className={`${pet.isDead ? 'opacity-50' : ''} transition-transform`}
-              style={{
-                transform: pet.hungerLevel <= 30 ? 'scale(0.95)' : 'scale(1)',
-                transition: 'transform 0.3s ease-in-out'
-              }}
-            >
-              {/* Mini Tamagotchi body */}
-              <circle 
-                cx="50" 
-                cy="50" 
-                r="30" 
-                fill={pet.isDead ? "#cccccc" : "#FFB6C1"} 
-              />
-              
-              {/* Mini arms - show training state */}
-              <path
-                d={pet.healthLevel >= 70 
-                  ? "M20 65 Q 35 60 40 65" 
-                  : "M20 65 Q 35 65 40 65"
-                }
-                stroke="black"
-                strokeWidth={pet.healthLevel >= 70 ? "3" : "1.5"}
-                fill="none"
-              />
-              <path
-                d={pet.healthLevel >= 70 
-                  ? "M80 65 Q 65 60 60 65" 
-                  : "M80 65 Q 65 65 60 65"
-                }
-                stroke="black"
-                strokeWidth={pet.healthLevel >= 70 ? "3" : "1.5"}
-                fill="none"
-              />
-              
-              {/* Mini eyes - show eating state */}
-              <circle 
-                cx="40" 
-                cy="45" 
-                r="4" 
-                fill="black" 
-                style={{ 
-                  transform: pet.hungerLevel <= 30 ? 'scaleY(0.5)' : 'none',
-                  transformOrigin: '40px 45px'
-                }}
-              />
-              <circle 
-                cx="60" 
-                cy="45" 
-                r="4" 
-                fill="black"
-                style={{ 
-                  transform: pet.hungerLevel <= 30 ? 'scaleY(0.5)' : 'none',
-                  transformOrigin: '60px 45px'
-                }}
-              />
-              
-              {/* Mini mouth - changes based on happiness */}
-              <path
-                d={pet.happinessLevel >= 70 
-                  ? "M 40 60 Q 50 70 60 60"  // Happy mouth
-                  : pet.happinessLevel <= 30
-                    ? "M 40 65 Q 50 60 60 65"  // Sad mouth
-                    : "M 40 60 Q 50 65 60 60"  // Neutral mouth
-                }
-                fill="none"
-                stroke="black"
-                strokeWidth="2"
-              />
-
-              {/* Activity indicator */}
-              {pet.hungerLevel <= 30 && (
-                <circle 
-                  cx="80" 
-                  cy="20" 
-                  r="5" 
-                  fill="#FFB6C1"
-                  opacity={0.7}
-                >
-                  <animate
-                    attributeName="opacity"
-                    values="0.7;0.3;0.7"
-                    dur="1s"
-                    repeatCount="indefinite"
-                  />
-                </circle>
-              )}
-              {pet.healthLevel < 70 && (
-                <circle 
-                  cx="20" 
-                  cy="20" 
-                  r="5" 
-                  fill="#90CDF4"
-                  opacity={0.7}
-                >
-                  <animate
-                    attributeName="opacity"
-                    values="0.7;0.3;0.7"
-                    dur="1s"
-                    repeatCount="indefinite"
-                  />
-                </circle>
-              )}
-            </animated.svg>
-
-            {/* Pet name */}
-            <span className="text-xs text-gray-600 absolute -bottom-4 left-1/2 transform -translate-x-1/2">
-              {`${pet.firstName} ${pet.surname}`}
-            </span>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
